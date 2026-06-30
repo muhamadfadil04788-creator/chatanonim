@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FADIL_NET // SECURE_GROUP_CHAT</title>
+    
+    <!-- Menggunakan Firebase Core dan Database v8 CDN agar langsung siap pakai -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        :root {
+            --neon-green: #00ff66;
+            --dark-bg: #050b05;
+            --terminal-gray: #111d11;
+            --text-dim: #63966e;
+            --admin-red: #ff3333;
+            --group-blue: #00e5ff;
+            --lock-amber: #ffb700;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--dark-bg);
+            color: var(--neon-green);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden;
+        }
+
+        body::before {
+            content: " "; display: block; position: fixed; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 255, 0, 0.06));
+            z-index: 99; background-size: 100% 3px, 3px 100%; pointer-events: none;
+        }
+
+        .layout-wrapper {
+            display: grid; grid-template-columns: 1fr; width: 95%; max-width: 1100px; height: 90vh; gap: 20px;
+        }
+        @media (min-width: 850px) {
+            .layout-wrapper { grid-template-columns: 3fr 1fr; }
+        }
+
+        .terminal-container {
+            background-color: var(--terminal-gray);
+            border: 2px solid var(--neon-green);
+            border-radius: 8px; box-shadow: 0 0 25px rgba(0, 255, 102, 0.15);
+            display: flex; flex-direction: column; overflow: hidden;
+        }
+
+        .terminal-header {
+            background-color: #080f08; padding: 12px 18px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 2px solid var(--neon-green); font-size: 0.9rem; letter-spacing: 2px; font-weight: bold;
+        }
+        .signature-fadil {
+            color: #fff; background: rgba(0, 255, 102, 0.2); padding: 2px 8px; border-radius: 4px;
+            box-shadow: 0 0 8px var(--neon-green);
+        }
+
+        .chat-area {
+            flex: 1; padding: 20px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .chat-area::-webkit-scrollbar { width: 6px; }
+        .chat-area::-webkit-scrollbar-thumb { background: var(--neon-green); }
+
+        .message { line-height: 1.4; animation: fadeIn 0.15s ease-in-out; }
+        .msg-timestamp { color: var(--text-dim); font-size: 0.8rem; margin-right: 8px; }
+        .msg-user { color: var(--group-blue); font-weight: bold; }
+        .msg-text { word-break: break-all; }
+        
+        .msg-fadil { color: #fff; text-shadow: 0 0 8px var(--neon-green); font-weight: 900; }
+        .msg-sys { color: var(--admin-red); font-weight: bold; }
+
+        .input-area {
+            display: flex; background-color: #080f08;
+            border-top: 2px solid var(--neon-green); padding: 15px; gap: 10px; align-items: center;
+        }
+        .input-field {
+            background: transparent; border: none; color: var(--neon-green);
+            font-family: inherit; font-size: 1rem; width: 100%; outline: none;
+        }
+        .username-input { width: 120px; color: #ffb74d; border-right: 1px solid var(--text-dim); }
+
+        .send-btn {
+            background: transparent; border: 1px solid var(--neon-green); color: var(--neon-green);
+            font-family: inherit; font-size: 1rem; padding: 8px 16px; cursor: pointer; border-radius: 4px;
+            font-weight: bold; transition: all 0.2s;
+            user-select: none; -webkit-user-select: none;
+        }
+        .send-btn:hover {
+            background: var(--neon-green); color: #000; box-shadow: 0 0 10px var(--neon-green);
+        }
+
+        .admin-panel {
+            background-color: #120505; border: 2px solid var(--lock-amber);
+            border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 15px;
+            box-shadow: 0 0 15px rgba(255, 183, 0, 0.1); position: relative;
+        }
+        .admin-title {
+            font-size: 0.9rem; color: var(--lock-amber); font-weight: bold; text-align: center;
+            border-bottom: 1px dashed var(--lock-amber); padding-bottom: 8px; letter-spacing: 1px;
+        }
+        
+        .lock-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(18, 5, 5, 0.95); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; gap: 10px; border-radius: 6px; z-index: 10;
+        }
+        .lock-icon { font-size: 2.5rem; animation: pulse 2s infinite; }
+        
+        .admin-btn {
+            background: transparent; border: 1px solid var(--admin-red); color: var(--admin-red);
+            font-family: inherit; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: bold;
+            transition: all 0.2s;
+        }
+        .admin-btn:hover { background: var(--admin-red); color: #000; box-shadow: 0 0 10px var(--admin-red); }
+        .admin-input {
+            background: #200a0a; border: 1px solid var(--admin-red); color: #ff9999;
+            padding: 8px; font-family: inherit; font-size: 0.85rem; border-radius: 4px; outline: none;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.95); } }
+    </style>
+</head>
+<body>
+
+    <div class="layout-wrapper">
+        
+        <!-- UTAMA: TERMINAL GROUP CHAT BOX -->
+        <div class="terminal-container">
+            <div class="terminal-header">
+                <div>⚡ GLOBAL_GROUP // SECURE_NODE_01</div>
+                <div class="signature-fadil">👑 BY FADIL</div>
+            </div>
+
+            <div class="chat-area" id="chatArea">
+                <div class="message">
+                    <span class="msg-timestamp">[00:00:00]</span>
+                    <span class="msg-sys">[SYSTEM]:</span>
+                    <span class="msg-text" style="color: var(--text-dim);">Memasuki ruang obrolan grup rahasia Fadil... Semua pesan dienkripsi secara real-time.</span>
+                </div>
+            </div>
+
+            <!-- INPUT KHUSUS KOMPATIBILITAS HP ANDROID + TOMBOL KIRIM -->
+            <div class="input-area">
+                <span>$</span>
+                <input type="text" id="userInput" class="input-field username-input" placeholder="NICKNAME" maxlength="10" value="User_X">
+                <input type="text" id="messageInput" class="input-field" placeholder="Ketik pesan..." autocomplete="off" inputmode="text" enterkeyhint="send">
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">KIRIM</button>
+            </div>
+        </div>
+
+        <!-- PANEL KONTROL MODERASI GRUP -->
+        <div class="admin-panel" id="adminPanel">
+            
+            <!-- LAYAR TERKUNCI (HANYA FADIL : SAndi mfadil140205) -->
+            <div class="lock-overlay" id="lockOverlay">
+                <div class="lock-icon">🔒</div>
+                <div style="font-size: 0.8rem; color: var(--lock-amber); text-align: center; padding: 0 10px;">ROOT CONTROL LOCKED</div>
+                <button class="admin-btn" style="border-color: var(--lock-amber); color: var(--lock-amber); padding: 6px 12px; font-size: 0.8rem;" onclick="unlockControlPanel()">MASUKKAN KUNCI</button>
+            </div>
+
+            <div class="admin-title" style="color: var(--admin-red); border-color: var(--admin-red);">🔒 GROUP_ROOT (FADIL ONLY)</div>
+            
+            <label style="font-size: 0.8rem; color: #ff9999;">Broadcast Pengumuman Grup:</label>
+            <input type="text" id="broadcastInput" class="admin-input" placeholder="Peringatan/info grup...">
+            <button class="admin-btn" onclick="sendBroadcast()">KIRIM KE GRUP</button>
+            
+            <hr style="border: 0; border-top: 1px dashed #331111; width: 100%;">
+
+            <label style="font-size: 0.8rem; color: #ff9999;">Moderasi Ruangan:</label>
+            <button class="admin-btn" style="border-color: #ffaa00; color: #ffaa00;" onclick="clearAllChat()">BERSIHKAN PESAN GRUP (WIPE)</button>
+        </div>
+
+    </div>
+
+    <script>
+        // LANGSUNG DIHUBUNGKAN KE DATABASE FADIL TANPA SYARAT API_KEY BERBELIT
+        const firebaseConfig = {
+            databaseURL: "https://fadil-group-chat-default-rtdb.firebaseio.com/"
+        };
+
+        try {
+            firebase.initializeApp(firebaseConfig);
+            var database = firebase.database();
+            var chatRef = database.ref("fadil_group_nodes");
+            initGroupChat();
+        } catch (error) {
+            appendSystemMessage("CRITICAL_ERROR: Gagal memuat database grup.");
+        }
+
+        const chatArea = document.getElementById('chatArea');
+        const userInput = document.getElementById('userInput');
+        const messageInput = document.getElementById('messageInput');
+        const broadcastInput = document.getElementById('broadcastInput');
+        const lockOverlay = document.getElementById('lockOverlay');
+        const adminPanel = document.getElementById('adminPanel');
+
+        function appendSystemMessage(text) {
+            chatArea.innerHTML += `
+                <div class="message">
+                    <span class="msg-timestamp">[WARN]</span>
+                    <span class="msg-sys">[SYSTEM]:</span>
+                    <span class="msg-text">${text}</span>
+                </div>`;
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function getClockTime() {
+            return new Date().toTimeString().split(' ')[0];
+        }
+
+        function initGroupChat() {
+            userInput.value = "Hacker_" + Math.floor(1000 + Math.random() * 9000);
+
+            // Menampilkan pesan-pesan yang masuk
+            chatRef.limitToLast(100).on('child_added', (snapshot) => {
+                const data = snapshot.val();
+                displayMessage(data.time, data.user, data.msg);
+            });
+
+            chatRef.on('value', (snapshot) => {
+                if (!snapshot.exists()) {
+                    chatArea.innerHTML = "";
+                    appendSystemMessage("Riwayat obrolan grup telah dibersihkan oleh Fadil.");
+                }
+            });
+
+            // Deteksi penekanan tombol Enter/Kirim di keyboard Android maupun PC
+            messageInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter' || e.keyCode === 13) {
+                    sendMessage();
+                }
+            });
+        }
+
+        function sendMessage() {
+            const text = messageInput.value.trim();
+            if (text !== '') {
+                let userNickname = userInput.value.trim() || "Anonymous";
+                
+                chatRef.push({
+                    time: getClockTime(),
+                    user: userNickname,
+                    msg: text
+                }).then(() => {
+                    messageInput.value = '';
+                    messageInput.focus();
+                }).catch((error) => {
+                    appendSystemMessage("ERROR: Kiriman diblokir. Pastikan tab RULES di Firebase Console sudah disetel ke TRUE.");
+                });
+            }
+        }
+
+        function displayMessage(time, user, text) {
+            let userStyleClass = "msg-user";
+            let userTag = `${user}:~#`;
+
+            if (user.toLowerCase() === 'fadil') {
+                userStyleClass = "msg-fadil";
+                userTag = `[👑 OWNER] ${user}:`;
+            } else if (user === '[SYSTEM]') {
+                userStyleClass = "msg-sys";
+                userTag = `${user}:`;
+            }
+
+            const msgHtml = `
+                <div class="message">
+                    <span class="msg-timestamp">[${time}]</span>
+                    <span class="${userStyleClass}">${userTag}</span>
+                    <span class="msg-text">${escapeHTML(text)}</span>
+                </div>`;
+            chatArea.innerHTML += msgHtml;
+            chatArea.scrollTop = chatArea.scrollHeight; 
+        }
+
+        // =========================================================================
+        // PANEL KONTROL KATA SANDI FADIL
+        // =========================================================================
+        function unlockControlPanel() {
+            const passwordInput = prompt("Masukkan Sandi Otoritas Akses Root:");
+            if (passwordInput === "mfadil140205") {
+                lockOverlay.style.display = "none";
+                adminPanel.style.borderColor = "var(--admin-red)";
+                alert("ACCESS GRANTED. Selamat datang kembali, Fadil.");
+            } else {
+                alert("ACCESS DENIED. Sandi enkripsi salah!");
+            }
+        }
+
+        function sendBroadcast() {
+            if (broadcastInput.value.trim() === '') return;
+            chatRef.push({
+                time: getClockTime(),
+                user: "[SYSTEM]",
+                msg: "PENGUMUMAN: " + broadcastInput.value.trim().toUpperCase()
+            });
+            broadcastInput.value = '';
+        }
+
+        function clearAllChat() {
+            if (confirm("Apakah kamu (Fadil) yakin ingin menghapus dan mereset isi obrolan grup ini?")) {
+                chatRef.remove()
+                    .then(() => { alert("Obrolan grup berhasil di-wipe bersih!"); })
+                    .catch((err) => { alert("Error saat menghapus: " + err); });
+            }
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+        }
+    </script>
+</body>
+</html>
